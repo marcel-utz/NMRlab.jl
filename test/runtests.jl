@@ -1,6 +1,17 @@
 using NMRlab
 using Test
 
+
+@testset "SpectData basics" begin
+    
+    # construction
+    d = NMRlab.SpectData(ones(45,45,45),(range(0.0,1.0,45),range(1.0,2.0,45),range(2.0,3.0,45)))
+    
+    # slicing
+    @test typeof(d[:,1,1]) == NMRlab.SpectData{Float64,1}
+
+end
+
 @testset "NMRlab.jl FileIO" begin
     # Write your tests here.
    

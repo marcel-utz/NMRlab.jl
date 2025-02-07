@@ -12,9 +12,9 @@ abstract type NMRProcessor <: Function end
     (m::NMRProcessor)(A::AbstractArray)
 
 here is some fallback behaviour. NMR processors are defined
-# for SpectData objects. However, they can also be applied to
-# any AbstractArray, by promoting it to a SpectData, and then
-# extracting the data part.
+for SpectData objects. However, they can also be applied to
+any AbstractArray, by promoting it to a SpectData, and then
+extracting the data part.
 """
 (m::NMRProcessor)(A::AbstractArray) = m(SpectData(A)).dat
 
@@ -22,7 +22,7 @@ here is some fallback behaviour. NMR processors are defined
 @doc raw"""
     Chain(fs::Vararg{NMRProcessor}) 
 
-create a chain of processing tools, which will be
+returns a chain of processing tools, which will be
 applied in order (the first in the argument list is 
 applied first)
 """
@@ -38,6 +38,15 @@ struct FourierTransform <: NMRProcessor
     plan
 end
 
+@doc raw"""
+    function FourierTransform(SI::Vector,dims::Vector; fftshift=true)
+
+Fourier transform processor for data sets of size `SI`. `dims` is a Vector
+of the dimensions along which a Fourier transform will be computed.
+The corresponding coordinates are automatically replaced by frequencies,
+based on the Nyqvist theorem. The zero frequency appears in the centre of the
+spectrum. 
+"""
 function FourierTransform(SI::Vector,dims::Vector; fftshift=true)
     dummy=zeros(ComplexF64,SI...)
     plan=FFTW.plan_fft(dummy,dims)
@@ -46,10 +55,19 @@ end
 
 function (ft::FourierTransform)(S::SpectData)
     ftdat = ft.plan*S.dat
-    if ft.fftshift
-        FFTW.fftshift!(ftdat,dims)
+    newcoord=[]
+    for (k,d) in enumerate(S.coord)
+        if k in ft.dims && d isa AbstractRange
+            Δf = 1.0/step(d)
+            push!(newcoord, range(-Δf,Δf,length=length(d)))
+        else
+            push!(newcoord,d)
+        end
     end
-    return SpectData(ftdat,S.coord)
+    if ft.fftshift
+        ftdat=FFTW.fftshift(ftdat,ft.dims)
+    end
+    return SpectData(ftdat,(newcoord...,))
 end
 
 
@@ -60,15 +78,22 @@ end
 function (zf::ZeroFill)(A::SpectData{T,N}) where {T,N}
     oldsize = size(A)
     newsize = zf.SI
+    newcoord=[]
     for (k,d) in enumerate(newsize)
         if d isa Colon
             newsize[k]=oldsize[k]
+            push!(newcoord,A.coord[k])
+        elseif A.coord[k] isa AbstractRange
+            extrange = range(first(A.coord[k]),step=step(A.coord[k]),length=d)
+            push!(newcoord,extrange)
+        else
+            push!(newcoord,A.coord[k])
         end
     end
     newA = zeros(T, newsize...)
     oldRange = map(x->1:x,oldsize)
     newA[oldRange...] = A
-    return SpectData(newA,A.coord) 
+    return SpectData(newA,(newcoord...,)) 
 end
 
 struct Apodize <: NMRProcessor

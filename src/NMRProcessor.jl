@@ -59,7 +59,7 @@ function (ft::FourierTransform)(S::SpectData)
     for (k,d) in enumerate(S.coord)
         if k in ft.dims && d isa AbstractRange
             Δf = 1.0/step(d)
-            push!(newcoord, range(-Δf,Δf,length=length(d)))
+            push!(newcoord, range(-Δf/2,Δf/2,length=length(d)))
         else
             push!(newcoord,d)
         end

@@ -64,6 +64,7 @@ function getindex(S::SpectData,I...)
     end
 end 
 
+## ----------------------------------------------------------------------------
 
 @doc raw"""
     function coords(S::SpectData)
@@ -86,9 +87,9 @@ convert(::Type{SpectData},A::AbstractArray) = SpectData(A)
 
 
 @doc raw"""
-function import(path::String,vendor::Symbol)
+    function load(path::String,vendor::Symbol)
 
-Import a data set located at `path`, and return a `DataSet` object. `vendor` designates
+Load a data set located at `path`, and return a `DataSet` object. `vendor` designates
 the origin data format. Currently implemented are
 
 - `:Bruker`: the path points to a directory with a Bruker NMR data set.
@@ -107,3 +108,4 @@ function load(f::String,vendor::Symbol)
         error("Unsupported data format")
     end
 end
+

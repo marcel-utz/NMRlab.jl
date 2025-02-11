@@ -114,3 +114,76 @@ function (ap::Apodize)(A::SpectData)
     return(SpectData(apo,A.coord))
 end
 
+
+struct MedianBaselineCorrect <: NMRProcessor
+    dim::Int64
+    wdw::Int64
+    gauss::Vector{Float64}
+end
+
+function MedianBaselineCorrect(dim::Integer;wdw=1024)
+    g=exp.(-((-wdw:wdw)./wdw).^2)
+    g=g/sum(g)
+    return MedianBaselineCorrect(dim,wdw,g)
+end
+
+@doc """
+    function extrema(X::AbstractArray{T,N}, dim::Integer) 
+
+returns an array of all extremal values of `X` along the dimension `dim`.
+"""
+function extrema(X::AbstractArray{T,N}, dim::Integer) where {T,N} 
+    shifter=zeros(Int64,ndims(X))
+    shifter[dim]=1
+    left=circshift(X,-shifter)
+    right=circshift(X,shifter)
+
+    minmaxima = (X .> left .&& X .> right) .|| (X .< left .&& X .< right)
+    return X[minmaxima]
+end
+
+
+
+@doc"""
+    function conv(X::AbstractArray{T1,N}, y::AbstractVector{T2},dim::Integer) where {N>1,T1,T2}
+
+computes the convolution of the array `X` with the vector `y` along the dimension `dim`.
+The result is guaranteed to have the same size as `X`.
+"""
+function conv(X::AbstractArray{T1,N}, y::AbstractVector{T2},dim::Integer) where {N,T1,T2}
+    ax = axes(X,dim)
+    l = length(y)
+    indices = Any[axes(X)...]
+end
+
+function conv(x::AbstractVector{T1}, y::AbstractVector{T2} ) where {T1,T2}
+    m=length(x)
+    l=length(y)>>1 
+    b = [ reduce(+,view(x,max(k-l,1):min(k+l,m)) .*  view(y,max(1,l-k), min(l,l+k) ) )   for k=1:m]
+end
+
+
+import Statistics
+
+@doc raw"""
+    function (mb::MedianBaselineCorrect)(s::SpectData)
+
+subtract baseline for the real part of `s` by the algorithm of M. S. Friedrichs,
+*Journal of Biomolecular NMR*,  **5** (1995) 147  153.
+"""
+function (mb::MedianBaselineCorrect)(s::SpectData)
+    r=real(s.dat)
+    ax=axes(s,mb.dim)
+
+    indices=Any[axes(s)...]
+    b = [ begin
+           indices[mb.dim]= max(k-mb.wdw,1):min(k+mb.wdw,length(ax))
+           Statistics.median(extrema(view(r,indices...),mb.dim))
+         end
+
+        for k in ax
+    ]
+    
+    return s-cat(b,dims=mb.dim)
+end
+

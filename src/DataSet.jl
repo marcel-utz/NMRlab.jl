@@ -35,7 +35,7 @@ function Base.similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{SpectData}}
     SpectData(similar(Array{ElType}, axes(bc)), A.coord)
 end
 
-"`A = find_aac(As)` returns the first ArrayAndChar among the arguments."
+"`A = find_spdta(As)` returns the first SpectData among the arguments."
 find_spdta(bc::Base.Broadcast.Broadcasted) = find_spdta(bc.args)
 find_spdta(args::Tuple) = find_spdta(find_spdta(args[1]), Base.tail(args))
 find_spdta(x) = x
@@ -89,7 +89,9 @@ convert(::Type{SpectData},A::AbstractArray) = SpectData(A)
 @doc raw"""
     function load(path::String,vendor::Symbol)
 
-Load a data set located at `path`, and return a `DataSet` object. `vendor` designates
+Load a data set located at `path`, and return a dictionary with the 
+acquisition parameters as well as a `SpectData` object with the actual
+(time domain) data. `vendor` designates
 the origin data format. Currently implemented are
 
 - `:Bruker`: the path points to a directory with a Bruker NMR data set.

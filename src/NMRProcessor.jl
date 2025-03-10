@@ -148,18 +148,20 @@ end
     function conv(X::AbstractArray{T1,N}, y::AbstractVector{T2},dim::Integer) where {N>1,T1,T2}
 
 computes the convolution of the array `X` with the vector `y` along the dimension `dim`.
-The result is guaranteed to have the same size as `X`.
+The ends of `X` are zero-padded such that the result is guaranteed to have the same size as `X`.
+`NMRlab.conv()` uses a direct algorithm for the convolution, not fft. It is therefore efficient
+when the length of `y` is much less than the corresponding dimension of `X`. If this is not
+the case and performance is critical, a different algorithm should be used.
 """
 function conv(X::AbstractArray{T1,N}, y::AbstractVector{T2},dim::Integer) where {N,T1,T2}
-    ax = axes(X,dim)
-    l = length(y)
-    indices = Any[axes(X)...]
+    return mapslices(a->conv(a,y), X, dims=dim)
 end
 
 function conv(x::AbstractVector{T1}, y::AbstractVector{T2} ) where {T1,T2}
-    m=length(x)
-    l=length(y)>>1 
-    b = [ reduce(+,view(x,max(k-l,1):min(k+l,m)) .*  view(y,max(1,l-k), min(l,l+k) ) )   for k=1:m]
+    N=length(x)
+    M=length(y)>>1
+    lrange = isodd(length(y)) ? (-M:M) : (-M:(M-1))
+    b = [ sum( ((k+l>0 && k+l<=N) ? x[k+l] : zero(T1) ) * y[l+M+1] for l=lrange)   for k=1:N]
 end
 
 
@@ -183,7 +185,34 @@ function (mb::MedianBaselineCorrect)(s::SpectData)
 
         for k in ax
     ]
-    
-    return s-cat(b,dims=mb.dim)
+    e2kernel=exp.( ((-mb.wdw:mb.wdw)./mb.wdw).^2)
+    e2kernel ./= sum(e2kernel)
+    baseline = conv(cat(b,dims=mb.dim) , e2kernel)
+    return s-baseline
 end
 
+@doc raw"""
+    abstract type NMRProcessor1D <: NMRProcessor
+
+Data type for processing tools that apply to a single dimension, i.e., that are inherently
+1D. They need to be defined as functors that act on a `AbstractVector{T}`. They must
+contain a field `.dim` that indicates which dimension in a multidimensional array they
+should be applied to.
+"""
+abstract type NMRProcessor1D <: NMRProcessor end
+
+function (np1d::NMRProcessor1D)(A::SpectData{T,N}) where {T,N}
+    return mapslices(np1d,A,dims=np1d.dim)
+end
+
+
+struct PhaseCorrect <: NMRProcessor1D
+    ph0::Float64
+    ph1::Float64
+    dim::Int32
+end
+
+function (pc::PhaseCorrect)(x::SpectData{T,1}) where {T<:Number}
+    c = exp(im*pc.ph0).* exp.(im*pc.ph1.*coords(x,1))
+    return x.*c 
+end
